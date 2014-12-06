@@ -230,14 +230,14 @@ function cs_connected(cs) {
     cs.on('readable', cs_on_readable);
 }
 
-function cs_listening() {
-	console.log('8001 listening')
-}
-
 var lport;
 var dports = [];
 
 function main() {
+    function cs_listening() {
+	console.log('listening on port ' + cs_l.address().port);
+    }
+
 	lport = parseInt(process.argv[2], 10);
 	for (var i = 3; i < process.argv.length; ++i) {
 		dports.push(parseInt(process.argv[i], 10));
