@@ -3,52 +3,40 @@
 
 var net = require('net');
 
-// Because all conns are going one after another along the pipe having
-// one stop will hold up the others behind it.  For that reason we
-// should not regard backpressure strictly when writing onwards from
-// mux(8080) -> dest(80), but instead read as fast as possible from
-// mux and just write irregardless of back-pressure (or with a good
-// buffer at least).
-//
-// If a buffer limit is used, it may as well be a global one for all
-// conns, since all conns are affected when it fills. It should
-// probably be multiple megabytes, perhaps 16MB or 32MB.
-// (actually I think 64 or 128 KB would be more appropriate, that's enough
-// buffer to at least request more to be sent)
-//
-// Similarly for the other side, it should take from mux as quickly as
-// possible.
-//
-// We should still observe feedback when writing into the mux however,
-// since that does indicate the pipe is fully saturated, writing
-// into buffer won't help.
-//
-// Is 'readable' event round-robin? If not should implement
-// round-robin on top (just event robin, not for bandwidth).
+// Because all conns are going one after another along the pipe, having one
+// stop would hold up the others behind it.
 
-// Dropping data when we are having trouble passing it on sounds like a good
-// approach, but by that point TCP ack is already done on it, so a new set of
-// acks and buffers need to be made on top.
+// Backpressure for these conns should be handled using pre-agreed sliding
+// windows. The sender is committed to not send data past the agreed
+// window_size + the most recent write acknowledgement sent by the other end.
+// If the other side is not sending updated write acknowledgements for a
+// connection then the window will be filled and the client will know not to
+// send any more. The client won't need to resend, so only needs to know the
+// ack, window_size, and sent numbers.
 
-// Perhaps we need to send regular ack payloads for each stream to indicate how
-// far its been written (the implication being that if the client writes past
-// that plus a window size, the data is liable to be dropped.
+// A small window seems like a good idea. It should be enough that if
+// it is full and the source is not sending, then if it starts
+// drraining at full rate we still have enough time to ask the source
+// for more data before it fully drains.
 
-// The client must not write past the pre-accepted buffer size, if it does
-// that's an error. The server will drop the surplus data, and will not send
-// any further acks until it has cleared its internal buffers, at which point
-// it will ACKSET, telling the client it may resume resending from that point.
+// This would be the source<->mux RTT multiplied by the drain
+// bandwidth. The only reason we would expect buffer to be used if
+// that is less than the source<->mux bandwidth, so we use that as a
+// conservative measure. 600KB/s or 2MB/s are reasonable values these
+// days. 100ms (0.1s) is an in-betweenish estimate for RTT. This gives
+// 60KB or 200KB buffer. 128KB is in the middle.
+
+// Is this overly simplistic? Should/can the buffer instead be defined in terms
+// of latency somehow, like CoDeL?
 
 // The buffers are held in local memory, and anything for which we have written
 // and seen 'drain' since is ackable.
 
-// Backpressure is handled using pre-agreed sliding windows. The sender is
-// committed to not send data past the agreed window_size + the most recent
-// write acknowledgement sent by the other end. If the other side is not
-// sending updated write acknowledgements for a connection then the window will
-// be filled and the client will know not to send any more. The client won't
-// need to resend, so only needs to know the ack, window_size, and sent
-// numbers.
+// We should still observe the feedback when writing to the pipe itself is
+// buffering, and always read from the pipe as quickly as possible.
+
+// Is 'readable' event round-robin? If not, should implement round-robin on top
+// (just event robin, not for bandwidth).
 
 function cs_connected(cs) {
 
