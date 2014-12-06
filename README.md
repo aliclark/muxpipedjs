@@ -18,13 +18,13 @@ immediately, without any additional handshaking.
 
 When combined with spiped, this hides the number of services hosted on a
 machine, and likely hides any indication as to the nature of those services
-(which 2 spiped instances listening on 8022 and 8025 might do).
+(which 2 spiped instances listening on 8022 and 8025 would not do).
 
 muxpiped initialises the mux connection on startup, so when combined with
-coverpiped well result in cover data being set up immediately on the
-connection. Any new TCP connections will be completely indistinguishable from
-cover traffic, so it is not possible for an attacker to see when connections
-are being made if at all.
+coverpiped will result in cover data being set up immediately on the
+connection. Any new TCP connections are completely indistinguishable from cover
+traffic, so it's not possible for an observer to know when connections are
+being created or closed, if at all.
 
 What it does not
 ----------------
@@ -36,3 +36,10 @@ adversely impact any of the other streams, as it currently does.
 
 However the improvement would only be linear in the number of streams and it
 would take significant effort to use UDP, probably with its own drawbacks.
+
+TODO
+----
+
+ - per-connection send windows - currently data is locally buffered if the
+   destination won't accept it fast enough.
+
